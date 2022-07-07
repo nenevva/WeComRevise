@@ -54,18 +54,21 @@ public class DisableUserService {
 
     private String access_token;
 
+    //服务起点
     public void startDisableUserService() throws IOException {
 
         getToken();
         checkDisabledUser();
     }
 
+    //发送请求
     public JSONObject requestSender(String url) {
 
         String response = restTemplate.getForObject(url, String.class);
         return JSON.parseObject(response);
     }
 
+    //禁用用户
     public void disableUser(String userid) {
 
         String request = "{\"userid\": \"" + userid + "\",\"enable\": 0}";
@@ -75,6 +78,7 @@ public class DisableUserService {
         System.out.println(userid + " " + jsonResponse.getString("errmsg"));
     }
 
+    //获取access_token
     public void getToken() {
 
         String url = "https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=" + corpid + "&corpsecret=" + corpsecret;
@@ -85,10 +89,12 @@ public class DisableUserService {
             System.out.println("Succeed getting token.");
         } else {
             System.out.println("[ERROR] Failed when getting token: " + response.getString("\"errmsg\""));
+            System.exit(1);
         }
 
     }
 
+    //创建新表格
     public void createWorkbook(String path, ArrayList<Row> rowArrayList) throws IOException {
 
         XSSFWorkbook workbook = new XSSFWorkbook();
@@ -100,17 +106,18 @@ public class DisableUserService {
         System.out.println("New workbook created.");
     }
 
+    //读取表格，检查在rtx中被禁用的用户是否存在于企业微信中
     public void checkDisabledUser() throws IOException {
 
-        System.out.println("checkDisabledUser()");
-        System.out.println(filePath);
-
+        //设置输入输出文件路径
         Path path = Paths.get(filePath);
         String resultPath = path.getParent().toString() + "\\result.xlsx";
-        System.out.println("Output file path: " + resultPath);
-
         InputStream is = Files.newInputStream(path);
 
+        System.out.println("Source file path: " + filePath);
+        System.out.println("Output file path: " + resultPath);
+
+        //读取文件，获取表格内容
         Workbook workbook = null;
 
         if (filePath.endsWith("xls")) {
@@ -118,10 +125,11 @@ public class DisableUserService {
         } else if (filePath.endsWith("xlsx")) {
             workbook = new XSSFWorkbook(is);
         } else {
-            System.out.println("[ERROR] checkDisabledUser(): Unsupported file format.");
+            System.out.println("[ERROR] Unsupported source file format.");
             System.exit(1);
         }
 
+        //逐行读取
         Sheet sheet = workbook.getSheetAt(0);
         Row row;
         ArrayList<Row> rowArrayList = new ArrayList<>();
@@ -130,11 +138,13 @@ public class DisableUserService {
         for (int i = rowStartPos; i <= sheet.getLastRowNum(); i++) {
             row = sheet.getRow(i);
             if (row.getCell(columnPos).getNumericCellValue() == 1) {
-
+                //此用户在rtx中被禁用
+                //发送请求，检查此用户是否活跃于企业微信中
                 String userid = row.getCell(columnUserNamePos).getStringCellValue();
                 String url = "https://qyapi.weixin.qq.com/cgi-bin/user/get?access_token=" + access_token + "&userid=" + userid;
                 JSONObject response = requestSender(url);
 
+                //如果用户存在于企业微信中，则禁用此用户
                 if (response.getInteger("errcode").equals(0) && response.getInteger("enable") == 1) {
                     row.setRowNum(rowNum++);
                     rowArrayList.add(row);
@@ -144,6 +154,7 @@ public class DisableUserService {
                 }
             }
         }
+        //创建新表格
         if (output) {
             createWorkbook(resultPath, rowArrayList);
         }
